@@ -129,7 +129,9 @@
 <!-- ============ 人來人往動畫（街景） ============ -->
 <section id="street" class="relative bg-cream-100 border-b border-cream-200 overflow-hidden" aria-label="門口人來人往的街景動畫">
   <p class="text-center text-wood-700 font-serif font-bold text-lg sm:text-xl pt-8 px-4">每天，街坊鄰居都為這一口而來</p>
-  <div class="street-stage relative h-40 sm:h-44 mt-2" aria-hidden="true">
+  <!-- 3D 版（Three.js）；載入失敗時顯示下方 2D 版 -->
+  <div id="street3d" class="hidden relative h-64 sm:h-80 mt-2" aria-hidden="true"></div>
+  <div id="street2d" class="street-stage relative h-40 sm:h-44 mt-2" aria-hidden="true">
     <!-- 店面 -->
     <div class="street-shop absolute left-1/2 -translate-x-1/2 bottom-[14px] w-40 sm:w-48">
       <div class="h-5 rounded-t-lg bg-[repeating-linear-gradient(90deg,#e8892b_0_16px,#fffaf1_16px_32px)] shadow"></div>
@@ -727,6 +729,164 @@ $('#privacyLink').addEventListener('click', e => { e.preventDefault(); toast('�
     el.style.zIndex = [3, 2, 1][depth];
     el.innerHTML = '<span class="flip"><i class="fa-solid ' + icons[i % icons.length] + '"></i></span>';
     box.appendChild(el);
+  }
+})();
+
+// ============ 人來人往 3D 動畫（Three.js；失敗時保留 2D 版） ============
+(function () {
+  const host = document.getElementById('street3d'), flat = document.getElementById('street2d');
+  if (!host || !flat) return;
+  const lib = document.createElement('script');
+  lib.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+  lib.onload = function () {
+    try { init(); } catch (e) { host.classList.add('hidden'); flat.classList.remove('hidden'); }
+  };
+  document.head.appendChild(lib);
+
+  function init() {
+    const T = window.THREE;
+    const renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    host.classList.remove('hidden'); flat.classList.add('hidden');
+    host.appendChild(renderer.domElement);
+    renderer.domElement.style.display = 'block';
+
+    const scene = new T.Scene();
+    const camera = new T.PerspectiveCamera(34, 2, 0.1, 100);
+    scene.add(new T.HemisphereLight(0xfff3dc, 0x7a5236, 0.95));
+    const sun = new T.DirectionalLight(0xffffff, 0.75); sun.position.set(6, 10, 8); scene.add(sun);
+    const lam = c => new T.MeshLambertMaterial({ color: c });
+    const flatMat = (c, o) => new T.MeshBasicMaterial(Object.assign({ color: c }, o || {}));
+
+    // 地面與人行道
+    const ground = new T.Mesh(new T.PlaneGeometry(90, 40), flatMat(0xfaf3e6));
+    ground.rotation.x = -Math.PI / 2; scene.add(ground);
+    const pave = new T.Mesh(new T.PlaneGeometry(90, 4.4), flatMat(0xefe2c8));
+    pave.rotation.x = -Math.PI / 2; pave.position.set(0, 0.01, 0.6); scene.add(pave);
+
+    // 店面
+    const FRONT = -1.7;
+    const shopBody = new T.Mesh(new T.BoxGeometry(6.4, 3.2, 3), lam(0x5a3a24));
+    shopBody.position.set(0, 1.6, FRONT - 1.5); scene.add(shopBody);
+    const door = new T.Mesh(new T.PlaneGeometry(1.3, 2.2), flatMat(0x2b1a10));
+    door.position.set(0, 1.1, FRONT + 0.01); scene.add(door);
+    [-2.05, 2.05].forEach(x => {
+      const win = new T.Mesh(new T.PlaneGeometry(1.5, 1.2), flatMat(0xf0a04b));
+      win.position.set(x, 1.55, FRONT + 0.01); scene.add(win);
+    });
+    // 條紋遮雨棚
+    const ac = document.createElement('canvas'); ac.width = 256; ac.height = 16;
+    const ag = ac.getContext('2d');
+    for (let i = 0; i < 8; i++) { ag.fillStyle = i % 2 ? '#fffaf1' : '#e8892b'; ag.fillRect(i * 32, 0, 32, 16); }
+    const awnTex = new T.CanvasTexture(ac);
+    const awning = new T.Mesh(new T.BoxGeometry(6.8, 0.12, 1.5), new T.MeshLambertMaterial({ map: awnTex }));
+    awning.position.set(0, 2.72, FRONT + 0.62); awning.rotation.x = 0.3; scene.add(awning);
+    // 招牌
+    const sc = document.createElement('canvas'); sc.width = 512; sc.height = 128;
+    const signTex = new T.CanvasTexture(sc);
+    function drawSign() {
+      const g = sc.getContext('2d');
+      g.fillStyle = '#2b1a10'; g.fillRect(0, 0, 512, 128);
+      g.strokeStyle = '#e8892b'; g.lineWidth = 6; g.strokeRect(6, 6, 500, 116);
+      g.fillStyle = '#fffaf1'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '900 76px "Noto Serif TC", serif';
+      g.fillText(typeof BRAND_NAME !== 'undefined' ? BRAND_NAME : '鍋貼小所', 256, 68);
+      signTex.needsUpdate = true;
+    }
+    drawSign();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { drawSign(); render(); });
+    const sign = new T.Mesh(new T.BoxGeometry(3.6, 0.9, 0.16), [lam(0x2b1a10), lam(0x2b1a10), lam(0x2b1a10), lam(0x2b1a10), new T.MeshBasicMaterial({ map: signTex }), lam(0x2b1a10)]);
+    sign.position.set(0, 3.68, FRONT - 0.2); scene.add(sign);
+
+    // 行人
+    const palette = [0xcf7118, 0x3e2616, 0x7a5236, 0xe8892b, 0x4b6b5a, 0x6b5a7a, 0x9c4a3a, 0x3f5f7a];
+    const LANES = [-0.6, 0.3, 1.2, 2.1], EDGE = 14, DOOR_Z = FRONT - 0.4;
+    function limb(w, h, color, x, y) {
+      const pivot = new T.Group(); pivot.position.set(x, y, 0);
+      const m = new T.Mesh(new T.BoxGeometry(w, h, w), lam(color)); m.position.y = -h / 2; pivot.add(m);
+      return pivot;
+    }
+    function makePerson(i) {
+      const g = new T.Group(), c = palette[i % palette.length];
+      const torso = new T.Mesh(new T.CylinderGeometry(0.2, 0.24, 0.75, 10), lam(c)); torso.position.y = 1.05; g.add(torso);
+      const head = new T.Mesh(new T.SphereGeometry(0.19, 12, 10), lam(0xf1c9a5)); head.position.y = 1.63; g.add(head);
+      const legs = [limb(0.13, 0.68, 0x3e2616, -0.1, 0.68), limb(0.13, 0.68, 0x3e2616, 0.1, 0.68)];
+      const arms = [limb(0.1, 0.6, c, -0.29, 1.38), limb(0.1, 0.6, c, 0.29, 1.38)];
+      legs.concat(arms).forEach(l => g.add(l));
+      const sh = new T.Mesh(new T.CircleGeometry(0.4, 16), flatMat(0x000000, { transparent: true, opacity: 0.14 }));
+      sh.rotation.x = -Math.PI / 2; sh.position.y = 0.02; g.add(sh);
+      g.userData = { legs: legs, arms: arms, phase: Math.random() * 6, speed: 1.1 + Math.random() * 0.9, h: 0.92 + Math.random() * 0.22 };
+      g.scale.setScalar(g.userData.h);
+      scene.add(g); return g;
+    }
+    const pick = a => a[Math.floor(Math.random() * a.length)];
+    function spawnWalk(p, initial) {
+      const u = p.userData;
+      u.state = 'walk'; u.dir = Math.random() < 0.5 ? 1 : -1; u.z = pick(LANES) + (Math.random() - 0.5) * 0.3;
+      u.enter = Math.random() < 0.45;
+      const x = initial ? (Math.random() * 2 - 1) * EDGE : -u.dir * EDGE;
+      if (initial && u.enter && x * u.dir > 0) u.enter = false;   // 已經走過店門的就不進店
+      p.position.set(x, 0, u.z); p.rotation.y = u.dir * Math.PI / 2;
+    }
+    function spawnExit(p) {
+      const u = p.userData;
+      u.state = 'exit'; u.dir = Math.random() < 0.5 ? 1 : -1; u.z = pick(LANES); u.enter = false;
+      p.position.set(0, 0, DOOR_Z); p.rotation.y = 0;
+    }
+    const people = [], stats = { entered: 0 };
+    for (let i = 0; i < 14; i++) { const p = makePerson(i); spawnWalk(p, true); people.push(p); }
+
+    function update(dt, t) {
+      people.forEach(p => {
+        const u = p.userData, step = u.speed * dt;
+        if (u.state === 'walk') {
+          const before = p.position.x;
+          p.position.x += u.dir * step;
+          if (u.enter && before * p.position.x <= 0 && before !== 0) { u.state = 'enter'; p.position.x = 0; p.rotation.y = Math.PI; stats.entered++; }
+          else if (Math.abs(p.position.x) > EDGE) { Math.random() < 0.35 ? spawnExit(p) : spawnWalk(p, false); }
+        } else if (u.state === 'enter') {
+          p.position.z -= step;
+          if (p.position.z < DOOR_Z) { Math.random() < 0.5 ? spawnExit(p) : spawnWalk(p, false); }
+        } else {
+          p.position.z += step;
+          if (p.position.z >= u.z) { p.position.z = u.z; u.state = 'walk'; p.rotation.y = u.dir * Math.PI / 2; }
+        }
+        const a = Math.sin(t * u.speed * 5 + u.phase) * 0.6;
+        u.legs[0].rotation.x = a; u.legs[1].rotation.x = -a;
+        u.arms[0].rotation.x = -a * 0.6; u.arms[1].rotation.x = a * 0.6;
+      });
+    }
+    function render() { renderer.render(scene, camera); }
+    function resize() {
+      const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
+      renderer.setSize(w, h, false);
+      renderer.domElement.style.width = '100%'; renderer.domElement.style.height = '100%';
+      camera.aspect = w / h;
+      const narrow = camera.aspect < 1.6;
+      camera.position.set(0, narrow ? 5.4 : 5, narrow ? 15.5 : 13);
+      camera.lookAt(0, narrow ? 1.1 : 1.4, -0.5);
+      camera.updateProjectionMatrix(); render();
+    }
+    window.addEventListener('resize', resize); resize();
+
+    const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    update(0, 0); render();
+    if (still) return;
+    let visible = true, last = performance.now(), raf = 0;
+    function loop(now) {
+      raf = 0;
+      const dt = Math.min((now - last) / 1000, 0.05); last = now;
+      update(dt, now / 1000); render();
+      if (visible) raf = requestAnimationFrame(loop);
+    }
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (es) {
+        visible = es[0].isIntersecting;
+        if (visible && !raf) { last = performance.now(); raf = requestAnimationFrame(loop); }
+      }).observe(host);
+    }
+    raf = requestAnimationFrame(loop);
+    window.__street3d = { people: people, stats: stats };
   }
 })();
 
