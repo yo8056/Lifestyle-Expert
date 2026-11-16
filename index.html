@@ -55,10 +55,22 @@
   .btn.primary{background:#2563eb}
   .btn.ghost{background:#334155}
 
+  /* 4. 右下角浮動「立即預約」按鈕（層級低於結果彈窗） */
+  #bookBtn{position:fixed;z-index:5;
+    right:calc(20px + env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));
+    padding:14px 22px;border-radius:999px;font-size:16px;font-weight:700;
+    color:#fff;text-decoration:none;background:#2563eb;
+    border:1px solid rgba(255,255,255,.2);box-shadow:0 6px 18px rgba(37,99,235,.45)}
+  #bookBtn:hover{background:#1d4ed8}
+  #bookBtn:focus-visible{outline:3px solid #93c5fd;outline-offset:3px}
+
   /* 手機直向：面板改為底部抽屜 */
   @media (max-width:700px){
     header h1{font-size:16px}
     #ui{top:auto;left:8px;right:8px;bottom:8px;width:auto;max-height:42vh}
+    /* 浮動按鈕移到底部抽屜上方，避免擋住篩選面板 */
+    #bookBtn{right:calc(8px + env(safe-area-inset-right,0px));bottom:calc(42vh + 18px);
+      padding:11px 18px;font-size:15px}
   }
 </style>
 <!-- 引進 Three.js CDN（r128 固定版本，cdnjs） -->
@@ -97,6 +109,10 @@
     <button id="spinBtn" disabled>決定吃什麼</button>
     <div class="hint" id="hint"></div>
   </aside>
+
+  <!-- 浮動預約按鈕 -->
+  <a id="bookBtn" href="https://calendar.app.google/fWyp8z9SDKJ8a3k37" target="_blank" rel="noopener"
+     aria-label="立即預約（另開新分頁）">立即預約</a>
 
   <!-- 結果彈窗層 -->
   <div id="modal" class="hidden">
