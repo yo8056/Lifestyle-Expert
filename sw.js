@@ -1,6 +1,6 @@
 /* 鍋貼小所 PWA service worker
    只處理鍋貼小所頁面自己的檔案；同一網域下的其他頁面（例如午餐選擇器 index.html）完全不攔截。 */
-const CACHE = 'guotie-v1';
+const CACHE = 'guotie-v2';
 const ASSETS = [
   './index2.html',
   './manifest.webmanifest',

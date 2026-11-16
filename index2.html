@@ -331,7 +331,7 @@
       <!-- 表單畫面 -->
       <div id="coFormView">
         <h2 id="coTitle" class="font-serif font-bold text-2xl">確認訂單</h2>
-        <p class="text-sm text-wood-600 mt-1">共 <span id="coCount">0</span> 件，合計 <b id="coTotal" class="text-amber2-600">NT$0</b>（此為展示頁面，不會實際送出資料）</p>
+        <p class="text-sm text-wood-600 mt-1">共 <span id="coCount">0</span> 件，合計 <b id="coTotal" class="text-amber2-600">NT$0</b></p>
         <form id="coForm" class="mt-5 space-y-4" novalidate>
           <fieldset>
             <legend class="text-sm font-bold mb-2">取餐方式</legend>
@@ -343,24 +343,31 @@
           </fieldset>
           <div>
             <label for="coName" class="text-sm font-bold">姓名 <span class="text-red-600">*</span></label>
-            <input id="coName" type="text" class="mt-1 w-full rounded-lg border border-cream-200 px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-amber2-400">
+            <input id="coName" type="text" maxlength="30" autocomplete="name" class="mt-1 w-full rounded-lg border border-cream-200 px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-amber2-400">
             <p class="err text-xs text-red-600 mt-1 hidden" data-for="coName">請輸入姓名</p>
           </div>
           <div>
             <label for="coPhone" class="text-sm font-bold">電話 <span class="text-red-600">*</span></label>
-            <input id="coPhone" type="tel" inputmode="tel" placeholder="例如 0912345678" class="mt-1 w-full rounded-lg border border-cream-200 px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-amber2-400">
+            <input id="coPhone" type="tel" inputmode="tel" maxlength="14" autocomplete="tel" placeholder="例如 0912345678" class="mt-1 w-full rounded-lg border border-cream-200 px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-amber2-400">
             <p class="err text-xs text-red-600 mt-1 hidden" data-for="coPhone">請輸入有效電話（8–12 碼數字）</p>
           </div>
           <div id="coAddrWrap" class="hidden">
             <label for="coAddr" class="text-sm font-bold">配送地址 <span class="text-red-600">*</span></label>
-            <input id="coAddr" type="text" class="mt-1 w-full rounded-lg border border-cream-200 px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-amber2-400">
+            <input id="coAddr" type="text" maxlength="100" autocomplete="street-address" class="mt-1 w-full rounded-lg border border-cream-200 px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-amber2-400">
             <p class="err text-xs text-red-600 mt-1 hidden" data-for="coAddr">宅配需填寫配送地址</p>
           </div>
           <div>
             <label for="coNote" class="text-sm font-bold">備註</label>
-            <textarea id="coNote" rows="2" class="mt-1 w-full rounded-lg border border-cream-200 px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-amber2-400"></textarea>
+            <textarea id="coNote" rows="2" maxlength="200" class="mt-1 w-full rounded-lg border border-cream-200 px-3 py-2.5 bg-white outline-none focus:ring-2 focus:ring-amber2-400"></textarea>
           </div>
-          <button type="submit" class="w-full bg-amber2-500 hover:bg-amber2-600 text-white font-bold py-3 rounded-full">建立訂單</button>
+          <!-- 蜜罐欄位：真人看不到也不會填，機器人填了就不建單 -->
+          <div class="absolute -left-[9999px] w-px h-px overflow-hidden" aria-hidden="true">
+            <label for="coWebsite">網站（請留空）</label>
+            <input id="coWebsite" name="website" type="text" tabindex="-1" autocomplete="off">
+          </div>
+          <div id="coError" class="hidden rounded-lg border border-red-300 bg-red-50 text-red-700 text-sm px-3 py-2.5" role="alert"></div>
+          <button id="coSubmit" type="submit" class="w-full bg-amber2-500 hover:bg-amber2-600 text-white font-bold py-3 rounded-full disabled:opacity-60 disabled:cursor-not-allowed">建立訂單</button>
+          <p class="text-xs text-wood-600 leading-relaxed">送出後，您填寫的姓名、電話與地址僅供門市處理本次訂單使用。本站為課程練習網站，訂單不會實際出餐，也不會收取任何款項。</p>
         </form>
       </div>
       <!-- 成功畫面 -->
@@ -369,7 +376,7 @@
         <h2 class="font-serif font-bold text-2xl mt-4">訂單已建立</h2>
         <p class="mt-2 text-sm text-wood-600">訂單編號</p>
         <p id="coOrderNo" class="font-bold text-xl tracking-wider text-amber2-600">—</p>
-        <p class="mt-3 text-sm text-wood-600">感謝您的訂購！（展示頁面，未送出任何資料）</p>
+        <p class="mt-3 text-sm text-wood-600">感謝您的訂購！合計 <b id="coPaid" class="text-amber2-600">NT$0</b>，門市已收到您的訂單。</p>
         <button id="coDone" class="mt-6 bg-wood-800 text-cream-50 font-bold px-8 py-3 rounded-full">完成</button>
       </div>
     </div>
@@ -518,6 +525,8 @@ renderMenu();
    購物車（狀態僅存於記憶體）
    ===================================================== */
 const cart = new Map(); // id -> 數量
+let sending = false;      // 訂單送出中
+let pendingReqId = null;  // 同一次送出重試時沿用，後端據此不重複建單
 const cartCount = () => [...cart.values()].reduce((a, b) => a + b, 0);
 const cartTotal = () => [...cart].reduce((s, [id, q]) => s + ALL_ITEMS.find(i => i.id === id).price * q, 0);
 
@@ -527,6 +536,7 @@ function addToCart(id) {
   toast(`已加入購物車：${ALL_ITEMS.find(i => i.id === id).name}`);
 }
 function renderCart() {
+  if (!sending) pendingReqId = null; // 購物車變動就換新的送出編號
   const n = cartCount();
   $('#cartBadge').textContent = n;
   $('#cartCount').textContent = n;
@@ -599,10 +609,13 @@ function openCheckout() {
   $('#coTotal').textContent = money(cartTotal());
   $('#coFormView').classList.remove('hidden');
   $('#coSuccessView').classList.add('hidden');
+  coError('');
+  setSending(false);
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 }
 function closeCheckout() {
+  if (sending) return; // 送出中不關閉，避免顧客以為沒送出又重下一次
   modal.classList.add('hidden');
   document.body.style.overflow = '';
 }
@@ -620,25 +633,88 @@ function setErr(id, show) {
   document.querySelector(`.err[data-for="${id}"]`).classList.toggle('hidden', !show);
   document.getElementById(id).classList.toggle('border-red-500', show);
 }
-$('#coForm').addEventListener('submit', e => {
-  e.preventDefault(); // 不實際送出任何資料
+// 訂單 API：Google Apps Script 網頁應用程式網址（訂單寫入 Google 試算表）
+const ORDER_API = 'https://script.google.com/macros/s/AKfycbzvUb04iWQueRoekVHMmoaW4iuwNGDro5imjm8rQHijqifnxSEUHaFAUyLK2t41L-iBCA/exec';
+const ORDER_TIMEOUT = 25000;
+const newReqId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12));
+function coError(msg) {
+  const box = $('#coError');
+  box.textContent = msg || '';
+  box.classList.toggle('hidden', !msg);
+}
+function setSending(on, label) {
+  sending = on;
+  const btn = $('#coSubmit');
+  btn.disabled = on;
+  btn.innerHTML = on ? '<i class="fa-solid fa-spinner fa-spin mr-2"></i>訂單送出中…' : (label || '建立訂單');
+}
+$('#coForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (sending) return; // 防重複送出
   const method = $('input[name="method"]:checked').value;
-  const nameOk = $('#coName').value.trim().length > 0;
-  const phoneOk = /^[0-9+\-\s]{8,14}$/.test($('#coPhone').value.trim());
-  const addrOk = method !== '宅配' || $('#coAddr').value.trim().length > 0;
+  const name = $('#coName').value.trim();
+  const phone = $('#coPhone').value.trim();
+  const addr = $('#coAddr').value.trim();
+  const note = $('#coNote').value.trim();
+  const nameOk = name.length > 0 && name.length <= 30;
+  const phoneOk = /^[0-9+\-\s]{8,14}$/.test(phone);
+  const addrOk = method !== '宅配' || addr.length > 0;
   setErr('coName', !nameOk);
   setErr('coPhone', !phoneOk);
   setErr('coAddr', !addrOk);
   if (!(nameOk && phoneOk && addrOk)) return;
-  // 隨機訂單編號
-  const no = 'GT' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.random().toString(36).slice(2, 7).toUpperCase();
-  $('#coOrderNo').textContent = no;
-  cart.clear();
-  renderCart();
-  $('#coForm').reset();
-  $('#coAddrWrap').classList.add('hidden');
-  $('#coFormView').classList.add('hidden');
-  $('#coSuccessView').classList.remove('hidden');
+  if (!cartCount()) return;
+  coError('');
+  if (!pendingReqId) pendingReqId = newReqId();
+  const payload = {
+    requestId: pendingReqId,
+    method, name, phone,
+    address: method === '宅配' ? addr : '',
+    note,
+    items: [...cart].map(([id, qty]) => ({ id, qty })),
+    clientTotal: cartTotal(),
+    website: $('#coWebsite').value
+  };
+  setSending(true);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ORDER_TIMEOUT);
+  try {
+    if (!ORDER_API) throw new Error('NO_API');
+    // 用 text/plain 送 JSON：屬於簡單請求，不會觸發 CORS 預檢（Apps Script 不回應預檢）
+    const res = await fetch(ORDER_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      signal: ctrl.signal
+    });
+    if (!res.ok) throw new Error('HTTP_' + res.status);
+    const data = await res.json();
+    if (!data || !data.ok) {
+      // 後端明確拒絕（欄位不符、下單太頻繁等）：顯示原因；換一個編號讓修正後可重送
+      if (data && data.code !== 'BUSY' && data.code !== 'SERVER') pendingReqId = null;
+      setSending(false, '重新送出');
+      coError((data && data.message) || '訂單未送出，請再試一次。');
+      return;
+    }
+    $('#coOrderNo').textContent = data.orderNo;
+    $('#coPaid').textContent = money(typeof data.total === 'number' ? data.total : payload.clientTotal);
+    pendingReqId = null;
+    cart.clear();
+    renderCart();
+    $('#coForm').reset();
+    $('#coAddrWrap').classList.add('hidden');
+    setSending(false);
+    $('#coFormView').classList.add('hidden');
+    $('#coSuccessView').classList.remove('hidden');
+  } catch (err) {
+    setSending(false, '重新送出');
+    coError(err.name === 'AbortError'
+      ? '連線逾時，訂單可能尚未送出。請按「重新送出」，系統不會重複建單。'
+      : '訂單送出失敗，請檢查網路後按「重新送出」，或直接來電門市訂購。');
+  } finally {
+    clearTimeout(timer);
+  }
 });
 
 /* =====================================================
