@@ -12,6 +12,15 @@
   2. 「每日賣出 10,000+ 顆」「30 年老店」為規格提供的示意文案，上線前需確認。
   3. 地址、電話、營業時間、價格皆為占位資料，上線前需替換。
 -->
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#3e2616">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="鍋貼小所">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@500;700;900&display=swap" rel="stylesheet">
@@ -889,6 +898,11 @@ $('#privacyLink').addEventListener('click', e => { e.preventDefault(); toast('�
     window.__street3d = { people: people, stats: stats };
   }
 })();
+
+// ============ PWA：註冊 service worker ============
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+}
 
 // ESC 關閉彈層
 document.addEventListener('keydown', e => {

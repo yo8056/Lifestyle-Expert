@@ -1,0 +1,17 @@
+{
+  "name": "鍋貼小所｜金黃酥脆，傳承手藝的極致美味",
+  "short_name": "鍋貼小所",
+  "description": "台灣在地豬肉、每日現包、現點現煎的鍋貼專賣店。線上點餐、冷凍禮盒、門市據點一站完成。",
+  "lang": "zh-Hant",
+  "start_url": "./index2.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fffaf1",
+  "theme_color": "#3e2616",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
