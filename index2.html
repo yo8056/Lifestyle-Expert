@@ -48,6 +48,19 @@
   @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   .toast-show { transform: translateY(0) !important; opacity: 1 !important; }
   .map-grid { background-image: linear-gradient(#e3d5b8 1px, transparent 1px), linear-gradient(90deg, #e3d5b8 1px, transparent 1px); background-size: 32px 32px; }
+  /* 人來人往動畫 */
+  .walker { position: absolute; left: 0; will-change: transform; animation: walk-r var(--dur) linear var(--delay) infinite; }
+  .walker.rev { animation-name: walk-l; }
+  .walker .flip { display: inline-block; }
+  .walker.rev .flip { transform: scaleX(-1); }
+  .walker i { display: inline-block; animation: bob .55s ease-in-out infinite alternate; }
+  @keyframes walk-r { from { transform: translateX(-80px); } to { transform: translateX(100vw); } }
+  @keyframes walk-l { from { transform: translateX(100vw); } to { transform: translateX(-80px); } }
+  @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .walker, .walker i { animation: none; }
+    .walker { left: var(--x); }
+  }
 </style>
 </head>
 <body class="antialiased">
@@ -94,18 +107,41 @@
 
 <main id="top" class="pt-[68px]">
 
-<!-- ============ Hero ============ -->
-<section class="relative min-h-[78vh] flex items-center text-cream-50 overflow-hidden bg-wood-800">
-  <img src="images/hero-poster.png" alt="金黃酥脆的鍋貼" class="absolute inset-0 w-full h-full object-cover opacity-50" onerror="this.style.display='none'">
-  <div class="absolute inset-0 bg-gradient-to-r from-wood-900/90 via-wood-900/60 to-transparent"></div>
-  <div class="relative max-w-7xl mx-auto px-4 py-20 w-full">
-    <p class="text-amber2-400 tracking-[.3em] text-sm mb-4">PAN-FRIED DUMPLING</p>
-    <h1 class="font-serif font-black text-4xl sm:text-5xl lg:text-6xl leading-tight max-w-2xl">金黃酥脆，<br>傳承手藝的極致美味</h1>
-    <p class="mt-6 text-cream-200 max-w-lg leading-relaxed">現點現煎，一口咬下，酥脆底、爆汁餡，是三十年不變的堅持。</p>
-    <div class="mt-9 flex flex-col sm:flex-row gap-3 sm:gap-4">
-      <a href="#order" class="text-center bg-amber2-500 hover:bg-amber2-600 text-white font-bold px-8 py-3.5 rounded-full transition"><i class="fa-solid fa-utensils mr-2"></i>線上點餐</a>
-      <a href="#stores" class="text-center border border-cream-50/70 hover:bg-cream-50 hover:text-wood-800 font-bold px-8 py-3.5 rounded-full transition"><i class="fa-solid fa-location-dot mr-2"></i>探索門市</a>
+<!-- ============ Hero（文字與海報左右分欄，手機上下排列，不疊字） ============ -->
+<section class="relative text-cream-50 overflow-hidden bg-wood-800">
+  <div class="absolute inset-0 bg-gradient-to-br from-wood-900 via-wood-800 to-wood-700"></div>
+  <div class="relative max-w-7xl mx-auto px-4 py-14 lg:py-20 w-full grid lg:grid-cols-2 gap-10 lg:gap-14 items-center lg:min-h-[78vh]">
+    <div>
+      <p class="text-amber2-400 tracking-[.3em] text-sm mb-4">PAN-FRIED DUMPLING</p>
+      <h1 class="font-serif font-black text-4xl sm:text-5xl lg:text-6xl leading-tight max-w-2xl">金黃酥脆，<br>傳承手藝的極致美味</h1>
+      <p class="mt-6 text-cream-200 max-w-lg leading-relaxed">現點現煎，一口咬下，酥脆底、爆汁餡，是三十年不變的堅持。</p>
+      <div class="mt-9 flex flex-col sm:flex-row gap-3 sm:gap-4">
+        <a href="#order" class="text-center bg-amber2-500 hover:bg-amber2-600 text-white font-bold px-8 py-3.5 rounded-full transition"><i class="fa-solid fa-utensils mr-2"></i>線上點餐</a>
+        <a href="#stores" class="text-center border border-cream-50/70 hover:bg-cream-50 hover:text-wood-800 font-bold px-8 py-3.5 rounded-full transition"><i class="fa-solid fa-location-dot mr-2"></i>探索門市</a>
+      </div>
     </div>
+    <div class="flex justify-center lg:justify-end">
+      <img src="images/hero-poster.png" alt="鍋貼小所品牌海報" width="640" height="800" class="w-full max-w-sm lg:max-w-md h-auto rounded-2xl shadow-2xl ring-1 ring-cream-50/20" onerror="this.parentElement.style.display='none'">
+    </div>
+  </div>
+</section>
+
+<!-- ============ 人來人往動畫（街景） ============ -->
+<section id="street" class="relative bg-cream-100 border-b border-cream-200 overflow-hidden" aria-label="門口人來人往的街景動畫">
+  <p class="text-center text-wood-700 font-serif font-bold text-lg sm:text-xl pt-8 px-4">每天，街坊鄰居都為這一口而來</p>
+  <div class="street-stage relative h-40 sm:h-44 mt-2" aria-hidden="true">
+    <!-- 店面 -->
+    <div class="street-shop absolute left-1/2 -translate-x-1/2 bottom-[14px] w-40 sm:w-48">
+      <div class="h-5 rounded-t-lg bg-[repeating-linear-gradient(90deg,#e8892b_0_16px,#fffaf1_16px_32px)] shadow"></div>
+      <div class="bg-wood-800 text-cream-50 text-center font-serif font-bold text-sm py-1 brand-name">鍋貼小所</div>
+      <div class="h-16 bg-wood-700 flex items-end justify-center gap-3 px-3">
+        <div class="w-10 h-10 bg-amber2-400/80 rounded-t-sm mb-3"></div>
+        <div class="w-9 h-14 bg-wood-900 rounded-t-md"></div>
+        <div class="w-10 h-10 bg-amber2-400/80 rounded-t-sm mb-3"></div>
+      </div>
+    </div>
+    <div id="walkers"></div>
+    <div class="absolute inset-x-0 bottom-0 h-[14px] bg-wood-600/25 border-t-2 border-wood-600/40"></div>
   </div>
 </section>
 
@@ -667,6 +703,32 @@ $('#newsForm').addEventListener('submit', e => {
   $('#newsForm').reset();
 });
 $('#privacyLink').addEventListener('click', e => { e.preventDefault(); toast('隱私權政策頁面尚未建立（示意連結）'); });
+
+// ============ 人來人往動畫：產生行人 ============
+(function () {
+  const box = document.getElementById('walkers');
+  if (!box) return;
+  const icons = ['fa-person-walking', 'fa-person-walking', 'fa-person-walking', 'fa-person-walking-luggage', 'fa-person-walking-with-cane', 'fa-person-running'];
+  const colors = ['#3e2616', '#5a3a24', '#7a5236', '#cf7118'];
+  const N = 12;
+  for (let i = 0; i < N; i++) {
+    const depth = i % 3;                      // 0 近、1 中、2 遠
+    const size = [44, 36, 28][depth];
+    const dur = [16, 22, 30][depth] + Math.random() * 6;
+    const el = document.createElement('span');
+    el.className = 'walker' + (i % 2 ? ' rev' : '');
+    el.style.setProperty('--dur', dur.toFixed(1) + 's');
+    el.style.setProperty('--delay', (-Math.random() * dur).toFixed(1) + 's');
+    el.style.setProperty('--x', (4 + i * (92 / N)).toFixed(1) + '%');
+    el.style.bottom = [12, 22, 32][depth] + 'px';
+    el.style.fontSize = size + 'px';
+    el.style.color = colors[i % colors.length];
+    el.style.opacity = [1, .75, .5][depth];
+    el.style.zIndex = [3, 2, 1][depth];
+    el.innerHTML = '<span class="flip"><i class="fa-solid ' + icons[i % icons.length] + '"></i></span>';
+    box.appendChild(el);
+  }
+})();
 
 // ESC 關閉彈層
 document.addEventListener('keydown', e => {
