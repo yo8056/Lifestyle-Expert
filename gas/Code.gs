@@ -7,6 +7,8 @@
  *  3. LockService 上鎖，同時多人下單也不會編號重複或寫錯列。
  *  4. 新訂單 Email 通知、每晚當日彙總 Email（可在「設定」表開關）。
  *  5. 試算表上方選單「鍋貼小所訂單」：初始化、送測試訂單、寄今日彙總。
+ *  6. doGet?action=track：客人用「訂單編號＋電話」查訂單的品項、金額、狀態、更新時間（不回傳姓名、地址）。
+ *  7. onEdit：店家在「訂單」表改「狀態」時，自動把同一列的「更新時間」寫成當下時間。
  *
  * 第一次使用：在編輯器選 setup 執行一次（會要求授權），再部署成網頁應用程式。
  * 不收、不存任何付款卡號。姓名、電話、地址屬個資，試算表請勿公開分享。
@@ -20,7 +22,11 @@ const CFG = {
   SHEET_PRODUCTS: '商品',
   SHEET_SETTINGS: '設定',
   METHODS: ['內用', '外帶', '宅配'],
-  STATUSES: ['新訂單', '已確認', '製作中', '已完成', '已取消'],
+  STATUSES: ['已收到', '製作中', '可取餐', '已完成', '已取消'],
+  OLD_STATUSES: ['新訂單', '已確認'],   // 舊版狀態，一律視為「已收到」
+  TRACK_LIMIT: 20,       // 同一訂單編號 10 分鐘內最多查幾次
+  TRACK_WINDOW: 600,
+  TRACK_HOURLY: 600,     // 全站每小時最多查幾次
   MAX_BODY: 8000,        // 請求內容上限（字元）
   MAX_LINES: 30,         // 一張訂單最多幾種品項
   MAX_QTY: 99,           // 單一品項數量上限
@@ -32,7 +38,7 @@ const CFG = {
   HOURLY_LIMIT: 120      // 全站每小時最多幾筆
 };
 
-const ORDER_HEADERS = ['訂單編號', '下單時間', '取餐方式', '姓名', '電話', '配送地址', '備註', '件數', '總金額', '狀態', '系統備註'];
+const ORDER_HEADERS = ['訂單編號', '下單時間', '取餐方式', '姓名', '電話', '配送地址', '備註', '件數', '總金額', '狀態', '系統備註', '更新時間'];
 const ITEM_HEADERS = ['訂單編號', '下單時間', '商品ID', '品名', '單價', '數量', '小計'];
 const PRODUCT_HEADERS = ['商品ID', '品名', '單價', '供應中'];
 const SETTING_HEADERS = ['項目', '值', '說明'];
@@ -48,7 +54,16 @@ const SEED_PRODUCTS = [
 
 /* ============================ 網頁應用程式入口 ============================ */
 
-function doGet() {
+function doGet(e) {
+  const p = e && e.parameter || {};
+  if (p.action === 'track') {
+    try {
+      return json_(handleTrack_(p));
+    } catch (err) {
+      console.error(err && err.stack || err);
+      return json_(fail_('SERVER', '系統忙碌中，請稍後再試一次。'));
+    }
+  }
   return json_({ ok: true, service: '鍋貼小所訂單 API', time: now_() });
 }
 
@@ -132,7 +147,7 @@ function handleOrder_(e) {
     const shI = ss.getSheetByName(CFG.SHEET_ITEMS);
     if (!shO || !shI) return fail_('SERVER', '試算表尚未初始化，請店家先執行「初始化」。');
     shO.getRange(shO.getLastRow() + 1, 1, 1, ORDER_HEADERS.length)
-      .setValues([[orderNo, when, method, safe_(name), safe_(phone), safe_(addr), safe_(note), count, total, CFG.STATUSES[0], sysNote]]);
+      .setValues([[orderNo, when, method, safe_(name), safe_(phone), safe_(addr), safe_(note), count, total, CFG.STATUSES[0], sysNote, when]]);
     shI.getRange(shI.getLastRow() + 1, 1, lines.length, ITEM_HEADERS.length)
       .setValues(lines.map(function (l) { return [orderNo, when, l.id, l.name, l.price, l.qty, l.sub]; }));
     SpreadsheetApp.flush();
@@ -148,6 +163,80 @@ function handleOrder_(e) {
   try { notifyNewOrder_(ss, orderNo, when, method, name, phone, addr, note, lines, total); } catch (err) { console.error('通知信失敗：' + err); }
 
   return { ok: true, orderNo: orderNo, total: total, count: count };
+}
+
+/* ============================ 訂單查詢 ============================ */
+
+// 客人查訂單：訂單編號＋電話都對才回傳。只回品項、金額、狀態、時間，不回姓名、電話、地址、備註。
+function handleTrack_(p) {
+  const NOT_FOUND = '查不到這筆訂單，請確認訂單編號與電話。';
+  const orderNo = str_(p.orderNo).toUpperCase();
+  const phone = str_(p.phone).replace(/\D/g, '');
+  if (!/^GT\d{6}-\d{3}$/.test(orderNo)) return fail_('VALIDATION', '訂單編號格式不正確，例如 GT261116-003。');
+  if (phone.length < 8 || phone.length > 14) return fail_('VALIDATION', '請輸入下單時填寫的電話。');
+
+  // 頻率限制：擋掉拿編號亂猜電話
+  const cache = CacheService.getScriptCache();
+  const noKey = 'tk_' + orderNo;
+  const noCnt = Number(cache.get(noKey) || 0);
+  if (noCnt >= CFG.TRACK_LIMIT) return fail_('RATE_LIMIT', '查詢太頻繁，請稍後再試。');
+  const hourKey = 'tkh_' + Utilities.formatDate(new Date(), CFG.TZ, 'yyMMddHH');
+  const hourCnt = Number(cache.get(hourKey) || 0);
+  if (hourCnt >= CFG.TRACK_HOURLY) return fail_('RATE_LIMIT', '目前查詢量過大，請稍後再試。');
+  cache.put(noKey, String(noCnt + 1), CFG.TRACK_WINDOW);
+  cache.put(hourKey, String(hourCnt + 1), 3900);
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const orders = rows_(ss.getSheetByName(CFG.SHEET_ORDERS));
+  let row = null;
+  for (let i = 0; i < orders.length; i++) {
+    if (String(orders[i][0]).trim() === orderNo) { row = orders[i]; break; }
+  }
+  if (!row || String(row[4]).replace(/\D/g, '') !== phone) return fail_('NOT_FOUND', NOT_FOUND);
+
+  const items = rows_(ss.getSheetByName(CFG.SHEET_ITEMS))
+    .filter(function (r) { return String(r[0]).trim() === orderNo; })
+    .map(function (r) { return { name: String(r[3]), qty: num_(r[5]), sub: num_(r[6]) }; });
+
+  return {
+    ok: true,
+    orderNo: orderNo,
+    method: String(row[2]),
+    status: normStatus_(row[9]),
+    orderedAt: String(row[1]),
+    updatedAt: str_(row[11]) || String(row[1]),
+    count: num_(row[7]),
+    total: num_(row[8]),
+    items: items
+  };
+}
+
+// 舊狀態（新訂單、已確認）與空白一律視為「已收到」
+function normStatus_(v) {
+  const s = str_(v);
+  if (!s || CFG.OLD_STATUSES.indexOf(s) >= 0) return CFG.STATUSES[0];
+  return s;
+}
+
+// 店家在「訂單」表改「狀態」（第 10 欄）時，自動記下更新時間（第 12 欄）
+function onEdit(e) {
+  try {
+    const rg = e && e.range;
+    if (!rg) return;
+    const sh = rg.getSheet();
+    if (sh.getName() !== CFG.SHEET_ORDERS) return;
+    if (rg.getColumn() > 10 || rg.getLastColumn() < 10) return;
+    const r1 = Math.max(rg.getRow(), 2), r2 = rg.getLastRow();
+    if (r2 < r1) return;
+    const n = r2 - r1 + 1;
+    const ids = sh.getRange(r1, 1, n, 1).getDisplayValues();
+    const tRange = sh.getRange(r1, 12, n, 1);
+    const old = tRange.getDisplayValues();
+    const t = now_();
+    tRange.setValues(ids.map(function (r, i) { return [String(r[0]).trim() ? t : old[i][0]]; }));
+  } catch (err) {
+    console.error('onEdit 失敗：' + err);
+  }
 }
 
 /* ============================ 訂單編號 ============================ */
@@ -234,8 +323,16 @@ function setup() {
   const shO = sheet_(ss, CFG.SHEET_ORDERS, ORDER_HEADERS);
   shO.getRange('A:G').setNumberFormat('@');                 // 文字格式：電話開頭的 0 不會被吃掉
   shO.getRange('I:I').setNumberFormat('"NT$"#,##0');
+  shO.getRange('L:L').setNumberFormat('@');
+  // 舊資料搬移：舊狀態改成「已收到」、沒有更新時間的補上下單時間（可重複執行，不刪資料）
+  const nO = shO.getLastRow() - 1;
+  if (nO > 0) {
+    const cur = shO.getRange(2, 1, nO, ORDER_HEADERS.length).getDisplayValues();
+    shO.getRange(2, 10, nO, 1).setValues(cur.map(function (r) { return [String(r[0]).trim() ? normStatus_(r[9]) : r[9]]; }));
+    shO.getRange(2, 12, nO, 1).setValues(cur.map(function (r) { return [str_(r[11]) || (String(r[0]).trim() ? r[1] : '')]; }));
+  }
   shO.getRange('J2:J').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(CFG.STATUSES, true).setAllowInvalid(false).build());
-  shO.setColumnWidths(1, 2, 150); shO.setColumnWidth(6, 220); shO.setColumnWidth(7, 220); shO.setColumnWidth(11, 260);
+  shO.setColumnWidths(1, 2, 150); shO.setColumnWidth(6, 220); shO.setColumnWidth(7, 220); shO.setColumnWidth(11, 260); shO.setColumnWidth(12, 150);
 
   const shI = sheet_(ss, CFG.SHEET_ITEMS, ITEM_HEADERS);
   shI.getRange('A:D').setNumberFormat('@');
@@ -312,6 +409,7 @@ function loadSettings_(ss) {
 }
 
 function str_(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
+function num_(v) { return Number(String(v).replace(/[^\d.]/g, '')) || 0; }
 
 // 防試算表公式注入：= + - @ 開頭的文字前面加單引號，當純文字存
 function safe_(s) { return /^[=+\-@\t\r]/.test(s) ? "'" + s : s; }
