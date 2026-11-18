@@ -325,6 +325,7 @@ function setup() {
   shO.getRange('I:I').setNumberFormat('"NT$"#,##0');
   shO.getRange('L:L').setNumberFormat('@');
   // 舊資料搬移：舊狀態改成「已收到」、沒有更新時間的補上下單時間（可重複執行，不刪資料）
+  shO.getRange('J2:J').clearDataValidations();              // 先拿掉舊下拉，否則舊規則會擋下新狀態
   const nO = shO.getLastRow() - 1;
   if (nO > 0) {
     const cur = shO.getRange(2, 1, nO, ORDER_HEADERS.length).getDisplayValues();
